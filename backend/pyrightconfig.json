@@ -1,0 +1,11 @@
+{
+  "venvPath": ".",
+  "venv": "venv",
+  "include": ["app", "main.py", "test_mongo.py"],
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": ["app"]
+    }
+  ]
+}
