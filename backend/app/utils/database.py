@@ -21,6 +21,10 @@ database = client[DB_NAME]
 
 users_collection = database.users
 tasks_collection = database.tasks
+
+goals_collection = database.goals
+activity_collection = database.activity
+push_subscriptions_collection = database.push_subscriptions
 db_ready = False
 
 
@@ -32,9 +36,29 @@ async def create_indexes() -> bool:
         await tasks_collection.create_index("scheduled_time")
         await tasks_collection.create_index([("user_id", 1), ("completed", 1)])
         await tasks_collection.create_index([("user_id", 1), ("scheduled_time", 1), ("completed", 1)])
+        
+        
+                # Goals
+        await goals_collection.create_index("user_id")
+
+        # Activity feed
+        await activity_collection.create_index("user_id")
+        await activity_collection.create_index("timestamp")
+        await activity_collection.create_index([("user_id", 1), ("timestamp", -1)])
+
+        # Push subscriptions
+        await push_subscriptions_collection.create_index("user_id")
+
+        print("Database indexes created")
+        
         db_ready = True
         return True
     except PyMongoError as exc:
         db_ready = False
         print(f"Database index initialization failed: {exc}")
         return False
+
+
+
+
+

@@ -8,6 +8,12 @@ from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
 
 from app.routes import auth_routes, task_routes
+from app.routes.activity_routes import router as activity_router
+from app.routes.goals_routes import router as goals_router
+from app.routes.insights_routes import router as insights_router
+from app.routes.stats_routes import router as stats_router
+from app.routes.template_routes import router as templates_router
+from app.routes.user_routes import router as users_router
 from app.services.scheduler_service import start_scheduler, stop_scheduler
 from app.utils import database
 
@@ -24,9 +30,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AI Personal Task Bot",
-    description="Smart productivity assistant with NLP task parsing",
-    version="1.1.0",
+    title="AI Task Bot",
+    version="3.1.0",
+    description="Smart productivity assistant",
     lifespan=lifespan,
 )
 
@@ -35,7 +41,9 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:5174",
-        os.getenv("FRONTEND_URL", ""),
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        os.getenv("FRONTEND_URL", "http://localhost:5173"),
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -48,20 +56,23 @@ async def mongo_error_handler(request: Request, exc: PyMongoError):
     del request
     return JSONResponse(
         status_code=503,
-        content={
-            "detail": "Database is unavailable right now. Please try again in a moment.",
-            "error": str(exc),
-        },
+        content={"detail": "Database is unavailable. Please try again shortly."},
     )
 
 
 app.include_router(auth_routes.router)
 app.include_router(task_routes.router)
+app.include_router(stats_router)
+app.include_router(users_router)
+app.include_router(goals_router)
+app.include_router(activity_router)
+app.include_router(insights_router)
+app.include_router(templates_router)
 
 
 @app.get("/")
 async def root():
-    return {"message": "AI Personal Task Bot API", "status": "running", "version": "1.1.0"}
+    return {"message": "AI Task Bot API", "status": "ok", "version": "3.1.0"}
 
 
 @app.get("/health")
