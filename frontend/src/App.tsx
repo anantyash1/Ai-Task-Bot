@@ -7,11 +7,11 @@ import AnalyticsPage from "./pages/AnalyticsPage";
 import CalendarPage from "./pages/CalendarPage";
 import DashboardPage from "./pages/DashboardPage";
 import FocusPage from "./pages/FocusPage";
-import GoalsPage from "./pages/Goalspage";
+import GoalsPage from "./pages/GoalsPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import SettingsPage from "./pages/SettingsPage";
-import StreakPage from "./pages/Streakpage";
+import StreakPage from "./pages/StreakPage";
 import TasksPage from "./pages/TasksPage";
 import SmartInsights from "./components/SmartInsights";
 
