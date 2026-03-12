@@ -32,19 +32,24 @@ def _build_allowed_origins() -> list[str]:
     ]
 
     env_origins: list[str] = []
-    frontend_url = (os.getenv("FRONTEND_URL") or "").strip()
+    frontend_url = (os.getenv("FRONTEND_URL") or "").strip().rstrip("/")
     if frontend_url:
         env_origins.append(frontend_url)
 
     extra_origins_raw = os.getenv("CORS_ORIGINS", "")
     if extra_origins_raw:
-        env_origins.extend([origin.strip() for origin in extra_origins_raw.split(",") if origin.strip()])
+        env_origins.extend([origin.strip().rstrip("/") for origin in extra_origins_raw.split(",") if origin.strip()])
 
     origins: list[str] = []
     for origin in [*default_origins, *env_origins]:
         if origin not in origins:
             origins.append(origin)
     return origins
+
+
+def _build_origin_regex() -> str:
+    # Accept Vercel preview/prod domains by default unless explicitly overridden.
+    return os.getenv("CORS_ORIGIN_REGEX", r"^https://.*\.vercel\.app$")
 
 
 @asynccontextmanager
@@ -69,6 +74,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_build_allowed_origins(),
+    allow_origin_regex=_build_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
