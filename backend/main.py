@@ -91,6 +91,16 @@ async def mongo_error_handler(request: Request, exc: PyMongoError):
     )
 
 
+@app.exception_handler(Exception)
+async def unhandled_error_handler(request: Request, exc: Exception):
+    del request
+    print(f"Unhandled error: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
+
 app.include_router(auth_routes.router)
 app.include_router(task_routes.router)
 app.include_router(stats_router)
