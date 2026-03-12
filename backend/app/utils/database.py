@@ -2,7 +2,7 @@ import os
 
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo.errors import PyMongoError
+from pymongo.errors import PyMongoError, ConfigurationError
 
 load_dotenv()
 
@@ -10,13 +10,30 @@ MONGO_URL = os.getenv("MONGO_URL") or os.getenv("MONGODB_URL")
 DB_NAME = os.getenv("MONGO_DB_NAME", "ai_task_bot")
 
 if not MONGO_URL:
-    raise ValueError("MONGO_URL or MONGODB_URL environment variable is not set")
+    MONGO_URL = "mongodb://127.0.0.1:27017"
+    print("Warning: MONGO_URL/MONGODB_URL not set. Falling back to mongodb://127.0.0.1:27017")
 
-client = AsyncIOMotorClient(
-    MONGO_URL,
-    serverSelectionTimeoutMS=8000,
-    connectTimeoutMS=8000,
-)
+def _build_client(mongo_url: str) -> AsyncIOMotorClient:
+    return AsyncIOMotorClient(
+        mongo_url,
+        serverSelectionTimeoutMS=8000,
+        connectTimeoutMS=8000,
+    )
+
+
+try:
+    client = _build_client(MONGO_URL)
+except ConfigurationError as exc:
+    fallback_url = "mongodb://127.0.0.1:27017"
+    print(f"Mongo configuration error for '{MONGO_URL}': {exc}")
+    print(f"Falling back to {fallback_url}")
+    client = _build_client(fallback_url)
+except Exception as exc:
+    fallback_url = "mongodb://127.0.0.1:27017"
+    print(f"Mongo client init failed for '{MONGO_URL}': {exc}")
+    print(f"Falling back to {fallback_url}")
+    client = _build_client(fallback_url)
+
 database = client[DB_NAME]
 
 users_collection = database.users
@@ -36,9 +53,8 @@ async def create_indexes() -> bool:
         await tasks_collection.create_index("scheduled_time")
         await tasks_collection.create_index([("user_id", 1), ("completed", 1)])
         await tasks_collection.create_index([("user_id", 1), ("scheduled_time", 1), ("completed", 1)])
-        
-        
-                # Goals
+
+        # Goals
         await goals_collection.create_index("user_id")
 
         # Activity feed
@@ -50,15 +66,13 @@ async def create_indexes() -> bool:
         await push_subscriptions_collection.create_index("user_id")
 
         print("Database indexes created")
-        
+
         db_ready = True
         return True
     except PyMongoError as exc:
         db_ready = False
         print(f"Database index initialization failed: {exc}")
         return False
-
-
 
 
 

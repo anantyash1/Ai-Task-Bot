@@ -1,71 +1,170 @@
-# from datetime import datetime, timedelta
+from datetime import datetime, timedelta
+from typing import Any
 
-# from apscheduler.schedulers.asyncio import AsyncIOScheduler
-# from apscheduler.triggers.interval import IntervalTrigger
-# from bson import ObjectId
-
-# from app.services.email_service import send_reminder_email
-# from app.utils.database import tasks_collection, users_collection
-
-# scheduler: AsyncIOScheduler | None = None
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from bson import ObjectId
 
 
-# def _get_user_filter(user_id: str) -> dict:
-#     if ObjectId.is_valid(user_id):
-#         return {"_id": ObjectId(user_id)}
-#     return {"_id": user_id}
+scheduler = AsyncIOScheduler(timezone="UTC")
 
 
-# async def check_reminders() -> None:
-#     now = datetime.utcnow()
-#     due_cutoff = now + timedelta(minutes=5)
-
-#     cursor = tasks_collection.find(
-#         {
-#             "scheduled_time": {"$ne": None, "$lte": due_cutoff},
-#             "reminder_sent": False,
-#             "completed": False,
-#         }
-#     ).sort("scheduled_time", 1)
-
-#     async for task in cursor:
-#         user_email = None
-#         user_id = str(task.get("user_id", ""))
-#         if user_id:
-#             user = await users_collection.find_one(_get_user_filter(user_id), projection={"email": 1})
-#             user_email = user.get("email") if user else None
-
-#         email_payload = dict(task)
-#         if user_email:
-#             email_payload["user_email"] = user_email
-
-#         sent = send_reminder_email(email_payload)
-#         if sent:
-#             await tasks_collection.update_one(
-#                 {"_id": task["_id"], "reminder_sent": False},
-#                 {"$set": {"reminder_sent": True}},
-#             )
+def _get_user_filter(user_id: Any) -> dict[str, Any]:
+    user_id_str = str(user_id)
+    if ObjectId.is_valid(user_id_str):
+        return {"_id": ObjectId(user_id_str)}
+    return {"_id": user_id_str}
 
 
-# def start_scheduler() -> None:
-#     global scheduler
-#     if scheduler and scheduler.running:
-#         return
+async def check_and_send_reminders() -> None:
+    try:
+        from app.services.email_service import send_task_reminder
+        from app.services.telegram_service import send_task_reminder_telegram
+        from app.utils.database import tasks_collection, users_collection
 
-#     scheduler = AsyncIOScheduler(timezone="UTC")
-#     scheduler.add_job(
-#         check_reminders,
-#         trigger=IntervalTrigger(minutes=1),
-#         id="task-reminder-check",
-#         replace_existing=True,
-#         max_instances=1,
-#         coalesce=True,
-#     )
-#     scheduler.start()
+        now = datetime.utcnow()
+        upcoming = now + timedelta(minutes=5)
+        cursor = tasks_collection.find(
+            {
+                "scheduled_time": {"$gte": now, "$lte": upcoming},
+                "reminder_sent": False,
+                "completed": False,
+            }
+        )
+
+        async for task in cursor:
+            user = await users_collection.find_one(_get_user_filter(task.get("user_id")))
+            if not user:
+                continue
+
+            send_task_reminder(
+                to_email=user.get("email", ""),
+                user_name=user.get("name", "User"),
+                task_title=task.get("title", "Task"),
+                scheduled_time=task.get("scheduled_time"),
+            )
+
+            chat_id = user.get("telegram_chat_id")
+            if chat_id:
+                try:
+                    await send_task_reminder_telegram(
+                        chat_id=chat_id,
+                        task_title=task.get("title", "Task"),
+                        scheduled_time=task.get("scheduled_time"),
+                    )
+                except Exception:
+                    # Telegram notifications should never block task updates.
+                    pass
+
+            await tasks_collection.update_one(
+                {"_id": task["_id"]},
+                {"$set": {"reminder_sent": True}},
+            )
+    except Exception as exc:
+        print(f"Reminder check failed: {exc}")
 
 
-# def stop_scheduler() -> None:
-#     global scheduler
-#     if scheduler and scheduler.running:
-#         scheduler.shutdown(wait=False)
-#     scheduler = None
+async def send_daily_summaries() -> None:
+    try:
+        from app.services.email_service import send_daily_summary
+        from app.services.streak_service import update_user_streak
+        from app.utils.database import tasks_collection, users_collection
+
+        day_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=1)
+
+        async for user in users_collection.find({}):
+            user_id = str(user["_id"])
+            tasks = [
+                task
+                async for task in tasks_collection.find(
+                    {"user_id": user_id, "created_at": {"$gte": day_start, "$lt": day_end}}
+                )
+            ]
+            if not tasks:
+                continue
+
+            completed_count = sum(1 for task in tasks if task.get("completed"))
+            send_daily_summary(
+                to_email=user.get("email", ""),
+                user_name=user.get("name", "User"),
+                tasks=tasks,
+                completed_count=completed_count,
+                total_count=len(tasks),
+            )
+            await update_user_streak(user_id)
+    except Exception as exc:
+        print(f"Daily summary failed: {exc}")
+
+
+async def process_recurring() -> None:
+    try:
+        from app.services.recurring_service import process_recurring_tasks
+
+        await process_recurring_tasks()
+    except Exception as exc:
+        print(f"Recurring task processing failed: {exc}")
+
+
+async def run_auto_priority() -> None:
+    try:
+        from app.services.auto_priority_service import auto_reprioritize
+
+        await auto_reprioritize()
+    except Exception as exc:
+        print(f"Auto-priority processing failed: {exc}")
+
+
+async def run_overdue_handler() -> None:
+    try:
+        from app.services.overdue_service import handle_overdue_tasks
+
+        await handle_overdue_tasks()
+    except Exception as exc:
+        print(f"Overdue processing failed: {exc}")
+
+
+def start_scheduler() -> None:
+    if scheduler.running:
+        return
+
+    scheduler.add_job(
+        check_and_send_reminders,
+        "interval",
+        minutes=1,
+        id="reminders",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_auto_priority,
+        "interval",
+        hours=1,
+        id="auto-priority",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_overdue_handler,
+        "interval",
+        minutes=30,
+        id="overdue",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        process_recurring,
+        CronTrigger(hour=0, minute=5),
+        id="recurring",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        send_daily_summaries,
+        CronTrigger(hour=20, minute=0),
+        id="daily-summary",
+        replace_existing=True,
+    )
+    scheduler.start()
+    print("Scheduler started")
+
+
+def stop_scheduler() -> None:
+    if scheduler.running:
+        scheduler.shutdown(wait=False)

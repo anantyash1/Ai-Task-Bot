@@ -1,6 +1,13 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8002";
+const envApiUrl = (import.meta.env.VITE_API_URL || "").trim();
+const isCapacitorRuntime =
+  typeof window !== "undefined" &&
+  (window.location.protocol === "capacitor:" ||
+    (window.location.hostname === "localhost" && window.location.port === ""));
+
+const fallbackApiUrl = isCapacitorRuntime ? "http://10.0.2.2:8002" : "http://localhost:8002";
+const API_BASE_URL = (envApiUrl || fallbackApiUrl).replace(/\/+$/, "");
 
 const api = axios.create({
   baseURL: API_BASE_URL,
