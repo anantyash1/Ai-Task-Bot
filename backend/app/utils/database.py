@@ -6,7 +6,7 @@ from pymongo.errors import PyMongoError, ConfigurationError
 
 load_dotenv()
 
-MONGO_URL = os.getenv("MONGO_URL") or os.getenv("MONGODB_URL")
+MONGO_URL = os.getenv("MONGODB_URL") or os.getenv("MONGO_URL")
 DB_NAME = os.getenv("MONGO_DB_NAME", "ai_task_bot")
 
 if not MONGO_URL:
@@ -73,6 +73,5 @@ async def create_indexes() -> bool:
         db_ready = False
         print(f"Database index initialization failed: {exc}")
         return False
-
 
 
