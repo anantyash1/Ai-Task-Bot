@@ -1,13 +1,20 @@
 import axios from "axios";
 
 const envApiUrl = (import.meta.env.VITE_API_URL || "").trim();
+const isBrowser = typeof window !== "undefined";
 const isCapacitorRuntime =
-  typeof window !== "undefined" &&
+  isBrowser &&
   (window.location.protocol === "capacitor:" ||
     (window.location.hostname === "localhost" && window.location.port === ""));
+const isVercelFrontend = isBrowser && window.location.hostname.endsWith(".vercel.app");
 
-const fallbackApiUrl = isCapacitorRuntime ? "http://10.0.2.2:8002" : "http://localhost:8002";
-const API_BASE_URL = (envApiUrl || fallbackApiUrl).replace(/\/+$/, "");
+const fallbackApiUrl = isCapacitorRuntime
+  ? "http://10.0.2.2:8002"
+  : isVercelFrontend
+    ? "https://aitaskbotapi.onrender.com"
+    : "http://localhost:8002";
+
+export const API_BASE_URL = (envApiUrl || fallbackApiUrl).replace(/\/+$/, "");
 
 const api = axios.create({
   baseURL: API_BASE_URL,

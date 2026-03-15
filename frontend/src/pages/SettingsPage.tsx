@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Bell, Download, User, Send, CheckCircle2, FileJson, FileText, Smartphone } from "lucide-react";
-import api from "../api/axios";
+import api, { API_BASE_URL } from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 
 export default function SettingsPage() {
@@ -45,7 +45,7 @@ export default function SettingsPage() {
     } finally { setTesting(false); }
   };
 
-  const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8002";
+  const apiBase = API_BASE_URL;
   const token = localStorage.getItem("token");
 
   const Section = ({ title, icon: Icon, children }: any) => (
