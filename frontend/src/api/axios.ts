@@ -1,6 +1,7 @@
 import axios from "axios";
 
 const envApiUrl = (import.meta.env.VITE_API_URL || "").trim();
+const envApiTimeoutRaw = Number(import.meta.env.VITE_API_TIMEOUT_MS);
 const isBrowser = typeof window !== "undefined";
 const isCapacitorRuntime =
   isBrowser &&
@@ -16,10 +17,15 @@ const fallbackApiUrl = isCapacitorRuntime
     : "http://localhost:8002";
 
 export const API_BASE_URL = (envApiUrl || fallbackApiUrl).replace(/\/+$/, "");
+export const API_TIMEOUT_MS = Number.isFinite(envApiTimeoutRaw) && envApiTimeoutRaw > 0
+  ? envApiTimeoutRaw
+  : isCapacitorRuntime
+    ? 60000
+    : 30000;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: API_TIMEOUT_MS,
   headers: { "Content-Type": "application/json" },
 });
 

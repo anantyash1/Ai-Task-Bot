@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, Zap, ArrowRight } from "lucide-react";
+import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 
 const FEATURES = [
@@ -20,6 +21,19 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    // Warm up backend so first login is less likely to hit cold-start timeout.
+    api.get("/health", { timeout: 20000 }).catch(() => undefined);
+  }, []);
+
+  const getLoginErrorMessage = (err: any) => {
+    const detail = err?.response?.data?.detail;
+    if (typeof detail === "string" && detail.trim()) return detail;
+    if (err?.code === "ECONNABORTED") return "Server is waking up. Please wait a few seconds and try again.";
+    if (err?.code === "ERR_NETWORK" || !err?.response) return "Cannot reach server. Check internet and try again.";
+    return "Login failed. Please try again.";
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -28,7 +42,7 @@ export default function LoginPage() {
       await login(email, password);
       navigate("/dashboard");
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Invalid credentials");
+      setError(getLoginErrorMessage(err));
     } finally {
       setLoading(false);
     }

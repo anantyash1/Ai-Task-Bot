@@ -48,8 +48,12 @@ def _build_allowed_origins() -> list[str]:
 
 
 def _build_origin_regex() -> str:
-    # Accept Vercel preview/prod domains by default unless explicitly overridden.
-    return os.getenv("CORS_ORIGIN_REGEX", r"^https://.*\.vercel\.app$")
+    # Accept Vercel preview/prod domains and common local mobile/webview origins
+    # unless explicitly overridden via env var.
+    return os.getenv(
+        "CORS_ORIGIN_REGEX",
+        r"^(https://.*\.vercel\.app$|https?://localhost(:\d+)?$|https?://127\.0\.0\.1(:\d+)?$|capacitor://localhost$|ionic://localhost$)",
+    )
 
 
 @asynccontextmanager
