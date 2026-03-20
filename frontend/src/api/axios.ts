@@ -7,11 +7,12 @@ const isCapacitorRuntime =
   (window.location.protocol === "capacitor:" ||
     (window.location.hostname === "localhost" && window.location.port === ""));
 const isVercelFrontend = isBrowser && window.location.hostname.endsWith(".vercel.app");
+const deployedApiUrl = "https://aitaskbotapi.onrender.com";
 
 const fallbackApiUrl = isCapacitorRuntime
-  ? "http://10.0.2.2:8002"
+  ? deployedApiUrl
   : isVercelFrontend
-    ? "https://aitaskbotapi.onrender.com"
+    ? deployedApiUrl
     : "http://localhost:8002";
 
 export const API_BASE_URL = (envApiUrl || fallbackApiUrl).replace(/\/+$/, "");
