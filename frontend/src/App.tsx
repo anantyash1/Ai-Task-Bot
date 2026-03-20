@@ -21,7 +21,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-cosmic-950">
+      <div className="app-auth-viewport flex items-center justify-center bg-cosmic-950">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
       </div>
     );

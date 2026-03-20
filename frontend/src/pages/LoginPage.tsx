@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, Zap, ArrowRight } from "lucide-react";
@@ -6,11 +6,24 @@ import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 
 const FEATURES = [
-  { icon: "🧠", text: "AI understands natural language" },
-  { icon: "⏰", text: "Smart reminders via email" },
-  { icon: "📊", text: "Beautiful analytics dashboard" },
-  { icon: "🎙️", text: "Voice input support" },
+  { icon: "AI", text: "AI understands natural language" },
+  { icon: "RM", text: "Smart reminders via email" },
+  { icon: "AN", text: "Beautiful analytics dashboard" },
+  { icon: "VC", text: "Voice input support" },
 ];
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (options: Record<string, unknown>) => void;
+          renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
+        };
+      };
+    };
+  }
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -18,11 +31,14 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  const googleReadyRef = useRef(false);
+  const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || "").trim();
 
   useEffect(() => {
-    // Warm up backend so first login is less likely to hit cold-start timeout.
     api.get("/health", { timeout: 20000 }).catch(() => undefined);
   }, []);
 
@@ -33,6 +49,77 @@ export default function LoginPage() {
     if (err?.code === "ERR_NETWORK" || !err?.response) return "Cannot reach server. Check internet and try again.";
     return "Login failed. Please try again.";
   };
+
+  const getGoogleErrorMessage = (err: any) => {
+    const detail = err?.response?.data?.detail;
+    if (typeof detail === "string" && detail.trim()) return detail;
+    if (err?.code === "ERR_NETWORK" || !err?.response) return "Cannot reach server. Check internet and try again.";
+    return "Google login failed. Please try again.";
+  };
+
+  useEffect(() => {
+    if (!googleClientId) return;
+
+    const setupGoogle = () => {
+      if (!window.google?.accounts?.id || !googleButtonRef.current || googleReadyRef.current) return;
+
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: async (response: any) => {
+          if (!response?.credential) {
+            setError("Google credential was not received.");
+            return;
+          }
+
+          setError("");
+          setGoogleLoading(true);
+          try {
+            await loginWithGoogle(response.credential);
+            navigate("/dashboard");
+          } catch (err: any) {
+            setError(getGoogleErrorMessage(err));
+          } finally {
+            setGoogleLoading(false);
+          }
+        },
+      });
+
+      googleButtonRef.current.innerHTML = "";
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: "outline",
+        size: "large",
+        text: "continue_with",
+        shape: "pill",
+        width: 320,
+      });
+      googleReadyRef.current = true;
+    };
+
+    if (window.google?.accounts?.id) {
+      setupGoogle();
+      return;
+    }
+
+    const existingScript = document.getElementById("google-gsi-script") as HTMLScriptElement | null;
+    if (existingScript) {
+      existingScript.addEventListener("load", setupGoogle);
+      return () => existingScript.removeEventListener("load", setupGoogle);
+    }
+
+    const script = document.createElement("script");
+    script.id = "google-gsi-script";
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = setupGoogle;
+    script.onerror = () => setError("Unable to load Google Sign-In. Please try again.");
+    document.head.appendChild(script);
+
+    return () => {
+      script.onload = null;
+      script.onerror = null;
+    };
+  }, [googleClientId, loginWithGoogle, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,13 +136,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-cosmic-950 flex overflow-hidden relative">
-      {/* Aurora orbs */}
+    <div className="app-auth-viewport bg-cosmic-950 flex overflow-x-hidden overflow-y-auto relative">
       <div className="orb orb-1" />
       <div className="orb orb-2" />
       <div className="orb orb-3" />
 
-      {/* Left panel — branding */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative z-10">
         <div>
           <div className="flex items-center gap-3">
@@ -76,7 +161,7 @@ export default function LoginPage() {
               <br />managed.
             </h1>
             <p className="text-white/50 mt-4 text-lg font-body leading-relaxed">
-              Just type naturally. AI handles the rest — scheduling, reminders, and analytics.
+              Just type naturally. AI handles the rest - scheduling, reminders, and analytics.
             </p>
           </div>
 
@@ -89,19 +174,16 @@ export default function LoginPage() {
                 transition={{ delay: 0.2 + i * 0.1 }}
                 className="flex items-center gap-3 glass-card rounded-xl px-4 py-3"
               >
-                <span className="text-xl">{f.icon}</span>
+                <span className="text-xs rounded-md bg-white/10 text-white/80 px-2 py-1 font-semibold">{f.icon}</span>
                 <span className="text-white/70 text-sm font-body">{f.text}</span>
               </motion.div>
             ))}
           </div>
         </div>
 
-        <p className="text-white/20 text-xs font-body">
-          © 2024 AI Task Bot · Built with FastAPI + React
-        </p>
+        <p className="text-white/20 text-xs font-body">(c) 2024 AI Task Bot � Built with FastAPI + React</p>
       </div>
 
-      {/* Right panel — form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -109,7 +191,6 @@ export default function LoginPage() {
           transition={{ duration: 0.5 }}
           className="w-full max-w-md"
         >
-          {/* Mobile logo */}
           <div className="flex items-center gap-2 mb-8 lg:hidden">
             <div className="w-8 h-8 rounded-xl bg-aurora-1 flex items-center justify-center">
               <Zap className="w-4 h-4 text-white" />
@@ -127,7 +208,7 @@ export default function LoginPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl px-4 py-3 text-sm mb-6 font-body"
               >
-                ⚠️ {error}
+                {error}
               </motion.div>
             )}
 
@@ -161,7 +242,7 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     className="cosmic-input pl-11 pr-12"
-                    placeholder="••••••••••"
+                    placeholder="**********"
                   />
                   <button
                     type="button"
@@ -177,10 +258,28 @@ export default function LoginPage() {
                 {loading ? (
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
-                  <>Sign In <ArrowRight className="w-4 h-4" /></>
+                  <>
+                    Sign In <ArrowRight className="w-4 h-4" />
+                  </>
                 )}
               </button>
             </form>
+
+            {googleClientId && (
+              <div className="mt-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-px flex-1 bg-white/10" />
+                  <span className="text-xs uppercase tracking-wider text-white/35">or</span>
+                  <div className="h-px flex-1 bg-white/10" />
+                </div>
+                <div className="rounded-xl bg-white px-3 py-2">
+                  <div ref={googleButtonRef} className="flex justify-center min-h-10" />
+                </div>
+                {googleLoading && (
+                  <p className="text-xs text-white/50 mt-2 text-center">Signing in with Google...</p>
+                )}
+              </div>
+            )}
 
             <div className="mt-6 pt-6 border-t border-white/5 text-center">
               <p className="text-white/30 text-sm font-body">

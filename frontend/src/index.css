@@ -12,11 +12,43 @@ html {
   scroll-behavior: smooth;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
 body {
   font-family: "DM Sans", sans-serif;
   background: #030712;
   color: #f1f5f9;
   -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.app-viewport {
+  height: 100dvh;
+  min-height: 100dvh;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 6px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.app-auth-viewport {
+  min-height: 100dvh;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+}
+
+@supports not (height: 100dvh) {
+  .app-viewport {
+    height: 100vh;
+    min-height: 100vh;
+  }
+
+  .app-auth-viewport {
+    min-height: 100vh;
+  }
 }
 
 /* Scrollbar */

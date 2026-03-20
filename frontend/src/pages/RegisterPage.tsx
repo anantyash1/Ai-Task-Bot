@@ -31,7 +31,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-cosmic-950 flex items-center justify-center p-6 relative overflow-hidden">
+    <div className="app-auth-viewport bg-cosmic-950 flex items-center justify-center p-6 relative overflow-x-hidden overflow-y-auto">
       <div className="orb orb-1" />
       <div className="orb orb-2" />
 

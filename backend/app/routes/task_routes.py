@@ -279,7 +279,7 @@ from app.services.nlp_service import parse_natural_language
 from app.services.ai_suggest_service import get_smart_suggestions
 from app.services.streak_service import update_user_streak
 from app.routes.activity_routes import log_activity
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 from bson import ObjectId
 from pydantic import BaseModel
@@ -300,11 +300,28 @@ def _parse_task_id(task_id: str) -> ObjectId:
     return ObjectId(task_id)
 
 
+def _to_utc_naive(value: Optional[datetime]) -> Optional[datetime]:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _to_utc_iso(value: Optional[datetime]) -> Optional[str]:
+    normalized = _to_utc_naive(value)
+    if normalized is None:
+        return None
+    return normalized.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def task_to_response(task: dict) -> dict:
+    scheduled_time = _to_utc_naive(task.get("scheduled_time"))
+    created_at = _to_utc_naive(task.get("created_at")) or datetime.utcnow()
     now = datetime.utcnow()
     is_overdue = (
-        task.get("scheduled_time") and
-        task["scheduled_time"] < now and
+        scheduled_time and
+        scheduled_time < now and
         not task.get("completed")
     )
     return {
@@ -313,7 +330,7 @@ def task_to_response(task: dict) -> dict:
         "title": task["title"],
         "category": task.get("category", "Other"),
         "priority": task.get("priority", "Medium"),
-        "scheduled_time": task["scheduled_time"].isoformat() if task.get("scheduled_time") else None,
+        "scheduled_time": _to_utc_iso(scheduled_time),
         "completed": task.get("completed", False),
         "reminder_sent": task.get("reminder_sent", False),
         "recurring": task.get("recurring", "none"),
@@ -324,7 +341,7 @@ def task_to_response(task: dict) -> dict:
         "overdue": is_overdue,
         "priority_auto_set": task.get("priority_auto_set", False),
         "auto_created": task.get("auto_created", False),
-        "created_at": task["created_at"].isoformat()
+        "created_at": _to_utc_iso(created_at)
     }
 
 
@@ -388,6 +405,7 @@ async def bulk_action(data: BulkAction, current_user: dict = Depends(get_current
 @router.post("/", status_code=201)
 async def create_task(task_data: TaskCreate, current_user: dict = Depends(get_current_user)):
     user_id = str(current_user["_id"])
+    scheduled_time = _to_utc_naive(task_data.scheduled_time)
     raw_subtasks = getattr(task_data, "subtasks", []) or []
     subtasks = [
         {"id": str(uuid.uuid4())[:8], "title": str(s).strip(), "completed": False}
@@ -399,7 +417,7 @@ async def create_task(task_data: TaskCreate, current_user: dict = Depends(get_cu
         "title": task_data.title.strip(),
         "category": task_data.category,
         "priority": task_data.priority,
-        "scheduled_time": task_data.scheduled_time,
+        "scheduled_time": scheduled_time,
         "completed": False,
         "reminder_sent": False,
         "recurring": getattr(task_data, "recurring", "none") or "none",
@@ -511,6 +529,9 @@ async def update_task(task_id: str, task_data: TaskUpdate, current_user: dict = 
     user_id = str(current_user["_id"])
     object_id = _parse_task_id(task_id)
     update_data = task_data.model_dump(exclude_none=True)
+    if "scheduled_time" in update_data:
+        update_data["scheduled_time"] = _to_utc_naive(update_data["scheduled_time"])
+        update_data["reminder_sent"] = False
     if not update_data:
         raise HTTPException(status_code=400, detail="No update data")
     await tasks_collection.update_one(

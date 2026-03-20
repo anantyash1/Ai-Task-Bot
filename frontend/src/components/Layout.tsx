@@ -127,7 +127,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const pageTitle = NAV.find((item) => item.path === location.pathname)?.label || "Workspace";
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-cosmic-950">
+    <div className="app-viewport flex w-full overflow-hidden bg-cosmic-950">
       <aside className="hidden w-64 flex-shrink-0 border-r border-white/10 bg-cosmic-900 lg:flex">
         <SidebarNav onNavigate={() => {}} />
       </aside>
